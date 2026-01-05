@@ -1,0 +1,212 @@
+# Per-model capability definitions for tests/validate.py
+# capabilities: list of tests to run for this model
+# Available tests: basic_chat, streaming, thinking_on, thinking_off, tool_calling,
+#                  multi_turn, long_context_16k, long_context_64k, vision
+
+nemotron-30b:
+  model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-NVFP4
+  quant: NVFP4
+  config: nemotron-30b-a3b-nvfp4.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - thinking_on       # nano_v3 reasoning parser; <think> via prompt prefix
+    - thinking_off      # enable_thinking: false skips reasoning block
+    - tool_calling      # qwen3_coder parser; generates <tool_call> XML
+    - multi_turn
+    - long_context_16k
+    - long_context_64k
+  known_issues:
+    - "prefix-caching disabled: Mamba hybrid causes garbage output (re-test with v0.16.0 + mamba-block-size: 16)"
+    - "fix_qwen3_reasoning_streaming.py required: <think> in prompt prefix not detected upstream"
+
+nemotron-9b:
+  model: nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4
+  quant: NVFP4
+  config: nemotron-nano-9b-nvfp4.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - thinking_on
+    - thinking_off
+    - tool_calling      # nemotron_json parser (streaming variant)
+    - multi_turn
+    - long_context_16k
+  known_issues:
+    - "prefix-caching disabled: same Mamba constraint as nemotron-30b"
+
+qwen3-14b:
+  model: Qwen/Qwen3-14B-FP8
+  quant: FP8
+  config: qwen3-14b-fp8.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - tool_calling      # hermes parser
+    - multi_turn
+    - long_context_16k
+  known_issues:
+    - "thinking disabled in config (default-chat-template-kwargs enable_thinking: false)"
+    - "LMCache KV transfer disabled (cache corruption bug)"
+
+qwen3-30b:
+  model: nvidia/Qwen3-30B-A3B-FP4
+  quant: NVFP4 MoE
+  config: qwen3-30b-a3b-nvfp4.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - thinking_on
+    - thinking_off
+    - tool_calling      # hermes parser
+    - multi_turn
+    - long_context_16k
+  known_issues:
+    - "enforce-eager: true required (Triton/compile issues with MoE)"
+
+qwen3.5-35b-nvidia:
+  model: txn545/Qwen3.5-35B-A3B-NVFP4
+  served_name: qwen3.5-35b   # served-model-name in config
+  quant: NVFP4 MoE (Nvidia official)
+  config: qwen3.5-35b-a3b-nvfp4-nvidia.yaml
+  reasoning_parser: qwen3
+  sampling_params:
+    thinking_mode: "temperature=1.0, top_p=0.95, top_k=20, presence_penalty=1.5"
+  capabilities:
+    - basic_chat
+    - streaming
+    - thinking_on
+    - thinking_off
+    - tool_calling
+    - multi_turn
+    - long_context_16k
+    - long_context_64k
+    - vision
+  notes:
+    - "Nvidia official NVFP4 quant — tested 2026-03-12, 100% on quality suite with official params"
+    - "presence_penalty=1.5 required — without it, thinking loops exhaust token budget"
+    - "No KV cache calibration data in checkpoint (uncalibrated q_scale=1.0 warning)"
+
+qwen3.5-35b:
+  model: Kbenkhaled/Qwen3.5-35B-A3B-NVFP4
+  quant: NVFP4 MoE
+  config: qwen3.5-35b-a3b-nvfp4.yaml
+  reasoning_parser: qwen3   # built-in vLLM parser (replaced custom nano_v3 plugin 2026-03-09)
+  capabilities:
+    - basic_chat
+    - streaming
+    - thinking_on
+    - thinking_off
+    - tool_calling      # qwen3_coder parser
+    - multi_turn
+    - long_context_16k
+    - long_context_64k
+    - vision
+  known_issues:
+    - "DeltaNet hybrid (30 linear + 10 full attn) — prefix-caching disabled"
+    - "262K context stable (native max, single-seq, 0.86 util). 0.88 util OOMs at startup"
+  mtp_tested:
+    model: Sehyo/Qwen3.5-35B-A3B-NVFP4
+    config: qwen3.5-35b-a3b-nvfp4-mtp.yaml
+    result: "NOT WORTH IT — MTP drafter uses unquantized Triton MoE, 0.90 util OOMs, 0.82 util matches baseline decode (~160 tok/s) but drops context 262K→65K. Tested 2026-03-09."
+
+gemma-3-12b:
+  model: google/gemma-3-12b-it
+  quant: BF16
+  config: gemma-3-12b.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - tool_calling      # hermes parser
+    - multi_turn
+    - long_context_16k
+    - vision
+  known_issues:
+    - "gpu-memory-utilization: 0.85 required for vision encoder headroom"
+
+devstral-small:
+  model: mistralai/Devstral-Small-2-24B-Instruct
+  quant: BF16
+  config: devstral-small-fp8.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - tool_calling      # mistral parser
+    - multi_turn
+    - long_context_16k
+  known_issues:
+    - "FP8 quantization causes cuBLAS errors on SM120 — running native BF16"
+    - "enforce-eager: true required"
+    - "max context 16K only (24GB BF16 leaves ~4.5GB for KV)"
+
+nemotron-flash-3b:
+  model: nvidia/Nemotron-Flash-3B-Instruct
+  quant: BF16
+  config: nemotron-flash-3b-instruct.yaml
+  capabilities:
+    - basic_chat
+    - streaming
+    - multi_turn
+
+gemma-4-26b-a4b:
+  model: google/gemma-4-26B-A4B-it
+  served_name: gemma-4-26b
+  quant: FP8 (server-side)
+  config: gemma-4-26b-a4b.yaml
+  reasoning_parser: gemma4
+  capabilities:
+    - basic_chat
+    - streaming
+    - thinking_on
+    - thinking_off
+    - tool_calling      # gemma4 parser
+    - multi_turn
+    - long_context_16k
+    - long_context_64k
+    - vision
+  notes:
+    - "MoE: 128 experts, top-8, 3.8B active / 25.2B total"
+    - "Hybrid attention: 26 sliding window (1024) + 4 full attention layers"
+    - "KV cache very light: 16 KiB/token (full attn) + 104 MiB fixed (sliding)"
+    - "Server-side FP8 — if SM120 cuBLAS errors, fallback to protoLabsAI/gemma-4-26B-A4B-it-FP8"
+    - "Gemma 4 recommended sampling: temp=1.0, top_p=0.95, top_k=64"
+
+gemma-4-31b-nvfp4:
+  model: nvidia/Gemma-4-31B-IT-NVFP4
+  quant: NVFP4 (ModelOpt)
+  config: gemma-4-31b-nvfp4.yaml
+  status: OOM
+  capabilities: []    # Model weights 30.50 GiB — exceeds 31.36 GiB GPU
+  known_issues:
+    - "Model loads at 30.50 GiB (mixed BF16/FP8/FP4 — non-quantized vision encoder, embeddings, layer norms)"
+    - "Exceeds 31.36 GiB RTX 5090 total capacity — cannot even fit weights"
+    - "Same issue as qwen3-32b-fp4: dense 31B too large for single 32GB GPU"
+
+# ── Broken / blocked models ────────────────────────────────────────────────────
+# These are documented here for tracking; not run by default
+
+gpt-oss-20b:
+  model: openai/gpt-oss-20b
+  quant: MXFP4
+  config: gpt-oss-20b.yaml
+  status: BROKEN
+  capabilities: []    # Cannot test - all MXFP4 backends fail on SM120
+  known_issues:
+    - "Marlin: PTX compiled with unsupported toolchain (SM120)"
+    - "SM90 CUTLASS: no SM120 tactics compiled"
+    - "SM100 TRT-LLM: rejects major=12 (SM120)"
+    - "Triton: SparseMatrix import error"
+    - "Custom CUDA kernels compiled for CUDA 12.x, incompatible with CUDA 13"
+    - "fix_mxfp4_sm120.py does not resolve — re-test after upstream SM120 MXFP4 support"
+
+qwen3-32b:
+  model: nvidia/Qwen3-32B-FP4
+  quant: NVFP4 dense
+  config: qwen3-32b-fp4.yaml
+  status: IMPRACTICAL
+  capabilities:
+    - basic_chat
+    - streaming
+  known_issues:
+    - "19GB model → only 8K context on 32GB VRAM (autotuner OOM at higher context)"
+    - "Not practical for production use"

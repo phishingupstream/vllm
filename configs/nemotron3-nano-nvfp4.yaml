@@ -1,0 +1,46 @@
+model: ~/.cache/huggingface/hub/models--cybermotaz--nemotron3-nano-nvfp4-w4a16/snapshots/8665d965624d2b21276e937298f8d52186f34a5d
+served-model-name:
+  - nemotron3-nano
+  - default
+host: "0.0.0.0"
+port: 8003
+allowed-local-media-path: "/data"
+trust-remote-code: True
+
+# Logging
+enable-log-requests: true
+enable-log-outputs: true
+log-error-stack: true
+uvicorn-log-level: "warning"
+
+# RTX 5090 (SM120) optimized settings
+# Model is 18.14 GiB - leaves ~5.5 GiB for KV cache + activations
+enforce-eager: true
+mamba-ssm-cache-dtype: float16
+
+# Scheduling
+enable-chunked-prefill: true
+enable-prefix-caching: false  # DISABLED: Mamba prefix caching causes garbage output
+
+# Memory tuning for 32GB VRAM with 18GB model
+# Lower batched tokens prevents OOM during FlashInfer autotune
+max-num-seqs: 2
+max-num-batched-tokens: 1024
+gpu-memory-utilization: 0.68
+
+# Context length - FULL 32K with FP8 KV cache
+max-model-len: 32768
+kv-cache-dtype: fp8_e4m3
+
+# Tool calling
+enable-auto-tool-choice: true
+tool-call-parser: "qwen3_coder"
+
+# Reasoning parser for nano v3
+reasoning-parser-plugin: "~/projects/vllm/parsers/nano_v3_reasoning_parser.py"
+reasoning-config: '{"reasoning_start_str": "<think>", "reasoning_end_str": "</think>"}'
+reasoning-parser: "nano_v3"
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

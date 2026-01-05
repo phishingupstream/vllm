@@ -1,0 +1,34 @@
+model: mistralai/Devstral-Small-2-24B-Instruct-2512
+served-model-name:
+  - devstral-small
+  - default
+host: "0.0.0.0"
+port: 8004
+trust-remote-code: true
+
+# Run in native BF16 (FP8 has cuBLAS issues on SM120/Blackwell)
+quantization: null
+# kv-cache-dtype: fp8_e4m3
+
+# RTX 5090 32GB - 24B model takes ~24GB in BF16
+# With 0.95 util, ~4.5GB available for KV cache (BF16), ~20K tokens max
+enforce-eager: true
+gpu-memory-utilization: 0.95
+max-model-len: 16384
+
+# Scheduling
+enable-chunked-prefill: true
+max-num-seqs: 4
+max-num-batched-tokens: 4096
+
+# Tool calling (Mistral format)
+enable-auto-tool-choice: true
+tool-call-parser: mistral
+
+# Logging
+enable-log-requests: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

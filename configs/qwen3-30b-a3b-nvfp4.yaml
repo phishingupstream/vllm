@@ -1,0 +1,51 @@
+model: nvidia/Qwen3-30B-A3B-FP4
+served-model-name:
+  - qwen3-30b
+  - default
+host: "0.0.0.0"
+port: 8004
+trust-remote-code: true
+
+# NVFP4 quantization (detected from model config)
+# Same format as nemotron3 - works on SM120 (Blackwell/RTX 5090)
+
+# RTX 5090 32GB - MoE model (30B params, 128 experts, ~3B active per token)
+# Model weights: ~17GB, KV cache: ~14GB at full batch
+enforce-eager: true
+gpu-memory-utilization: 0.90
+max-model-len: 32768
+
+# Scheduling - OPTIMIZED via benchmarking
+# Tested: max-num-seqs 4/8/16/32/64
+# max-num-seqs=64 -> OOM, max-num-seqs=32 optimal for 32GB
+enable-chunked-prefill: true
+max-num-seqs: 32
+max-num-batched-tokens: 32768
+
+# Benchmark Results (vllm:sm120-full, 128 output tokens):
+# ┌──────────────┬──────────────┬──────────────┬──────────────┐
+# │ Concurrency  │ Throughput   │ TTFT (ms)    │ TPOT (ms)    │
+# ├──────────────┼──────────────┼──────────────┼──────────────┤
+# │      1       │    36 tok/s  │     50       │    18        │
+# │      8       │   299 tok/s  │     50       │    18        │
+# │     16       │   592 tok/s  │     50       │    18        │
+# │     32       │  1271 tok/s  │     50       │    18        │
+# │     48       │  1288 tok/s  │     --       │    --        │
+# └──────────────┴──────────────┴──────────────┴──────────────┘
+# TTFT = Time to First Token, TPOT = Time per Output Token
+# vLLM 0.14.0rc1.dev181, FlashInfer CUTLASS backend
+
+# Tool calling (hermes parser extracts tool_calls properly)
+enable-auto-tool-choice: true
+tool-call-parser: hermes
+
+# Thinking mode: enabled by default
+# Disable with /no_think in prompt, or set enable_thinking=false in chat_template_kwargs
+
+# Logging
+enable-log-requests: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

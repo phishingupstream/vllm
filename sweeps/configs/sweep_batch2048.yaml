@@ -1,0 +1,49 @@
+# Nvidia's official NVFP4 quantization of Qwen3.5-35B-A3B (txn545)
+# Testing against Kbenkhaled version for quality comparison
+model: txn545/Qwen3.5-35B-A3B-NVFP4
+served-model-name:
+  - qwen3.5-35b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# Qwen3.5 DeltaNet hybrid attention (30 DeltaNet + 10 Attention layers)
+attention-config: '{"backend": "FLASHINFER"}'
+mm-encoder-attn-backend: TORCH_SDPA
+compilation-config: '{"mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1,2]}'
+# kernel-config: moe_backend auto-selects flashinfer_cutlass (best for SM120)
+# Tested: flashinfer_trtllm/cutedsl crash (unsupported on SM120), vllm cutlass is 8x slower
+
+# Sweep tested 2026-03-13: 0.86 is max safe value (Triton autotuner OOMs at 0.90+)
+gpu-memory-utilization: 0.86
+max-model-len: 262144
+kv-cache-dtype: fp8
+
+enable-prefix-caching: false
+enable-chunked-prefill: true
+async-scheduling: true
+# Workload sweep 2026-03-13: seqs=2 is optimal — 45% more throughput, 6x better TTFT,
+# only 37% TPOT increase (8.3ms vs 6.1ms). DeltaNet penalty cliff at seqs=4+ (32ms TPOT).
+max-num-seqs: 2
+max-num-batched-tokens: 2048
+
+# Tool calling
+enable-auto-tool-choice: true
+tool-call-parser: qwen3_coder
+
+# Thinking mode
+# Official recommended sampling for thinking mode general tasks.
+# The presence_penalty is critical — prevents runaway reasoning loops.
+reasoning-parser: qwen3
+default-chat-template-kwargs: '{"enable_thinking": true}'
+override-generation-config: '{"temperature": 1.0, "top_p": 0.95, "top_k": 20, "presence_penalty": 1.5}'
+
+# Multimodal
+limit-mm-per-prompt: '{"image": 4, "video": 1}'
+allowed-local-media-path: "/data"
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning

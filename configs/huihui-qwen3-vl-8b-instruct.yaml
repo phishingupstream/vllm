@@ -1,0 +1,28 @@
+model: huihui-ai/Huihui-Qwen3-VL-8B-Instruct-abliterated
+served-model-name:
+  - huihui-qwen3-vl-8b
+  - default
+reasoning-parser: qwen3
+reasoning-config: '{"reasoning_start_str": "<think>", "reasoning_end_str": "</think>"}'
+tokenizer-mode: auto
+enable-auto-tool-choice: true
+tool-call-parser: hermes
+enable-prefix-caching: true
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+enforce-eager: true
+gpu-memory-utilization: 0.90
+max-model-len: "8k"
+max-num-seqs: 256
+max-num-batched-tokens: 2048
+allowed-local-media-path: "/data"
+enable-log-requests: true
+enable-log-outputs: true
+log-error-stack: true
+uvicorn-log-level: "debug"
+
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

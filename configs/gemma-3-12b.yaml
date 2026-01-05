@@ -1,0 +1,35 @@
+model: google/gemma-3-12b-it
+served-model-name:
+  - gemma-3-12b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# Memory - Gemma 3 is multimodal (vision+text), uses ~30GB for model+warmup
+# Reduced utilization leaves headroom for vision encoder initialization
+gpu-memory-utilization: 0.85
+max-model-len: 32768
+kv-cache-dtype: fp8
+
+# Scheduling
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 4
+max-num-batched-tokens: 32768
+
+# Prefix caching
+enable-prefix-caching: true
+
+# Tool calling
+enable-auto-tool-choice: true
+tool-call-parser: hermes
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

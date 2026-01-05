@@ -1,0 +1,45 @@
+# Nvidia's NVFP4 quantization of Qwen3.5-27B (dense model, not MoE)
+# Smaller model — testing if dense architecture avoids MoE routing errors
+model: txn545/Qwen3.5-27B-NVFP4
+served-model-name:
+  - qwen3.5-27b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+attention-config: '{"backend": "FLASHINFER"}'
+mm-encoder-attn-backend: TORCH_SDPA
+compilation-config: '{"mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1,2]}'
+
+gpu-memory-utilization: 0.86
+max-model-len: 131072
+kv-cache-dtype: fp8
+
+enable-prefix-caching: true
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 1
+max-num-batched-tokens: 8192
+
+# Tool calling
+enable-auto-tool-choice: true
+tool-call-parser: qwen3_coder
+
+# Thinking mode
+reasoning-parser: qwen3
+reasoning-config: '{"reasoning_start_str": "<think>", "reasoning_end_str": "</think>"}'
+default-chat-template-kwargs: '{"enable_thinking": true}'
+
+# Multimodal
+limit-mm-per-prompt: '{"image": 4, "video": 1}'
+allowed-local-media-path: "/data"
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

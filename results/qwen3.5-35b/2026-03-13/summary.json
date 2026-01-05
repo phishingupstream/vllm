@@ -1,0 +1,40 @@
+{
+  "date": "2026-03-13",
+  "hf_root": "txn545/Qwen3.5-35B-A3B-NVFP4",
+  "model": "qwen3.5-35b",
+  "phases": {
+    "benchmarks": "passed",
+    "validate": "passed"
+  },
+  "scenarios": {
+    "smoke": {
+      "latency_s": {
+        "mean": 0.84,
+        "median": 0.83,
+        "p99": 0.85
+      },
+      "output_tok_s": {
+        "mean": 191.68,
+        "median": 153.44,
+        "p99": 306.78
+      },
+      "requests": 5,
+      "time_per_token_ms": {
+        "mean": 6.54,
+        "median": 6.52,
+        "p99": 6.63
+      },
+      "total_tok_s": {
+        "mean": 398.33,
+        "median": 318.86,
+        "p99": 637.53
+      }
+    }
+  },
+  "suite": "quick",
+  "timestamp": "2026-03-13T08:14:33",
+  "validate": {
+    "passed": true,
+    "test_count": 18
+  }
+}

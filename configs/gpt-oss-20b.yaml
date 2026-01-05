@@ -1,0 +1,36 @@
+model: openai/gpt-oss-20b
+served-model-name: gpt-oss-20b
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# Attention backend - auto (FlashInfer incompatible with sliding_window sinks in this model)
+
+# Eager mode - bypass custom compiled Triton MoE kernels (PTX version mismatch)
+enforce-eager: true
+
+# Memory - MXFP4 MoE 20B: ~13GB model weights
+# KV cache: 12 full-attn layers + 12 sliding-window (w=128) layers
+# 8 KV heads, head_dim=64 -> ~1.5GB per 128k seq (FP8)
+# 32GB * 0.90 = 28.8GB usable; ~15GB for KV cache supports ~4-8 seqs at 128k
+gpu-memory-utilization: 0.90
+max-model-len: 131072
+kv-cache-dtype: fp8
+
+# Scheduling
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 4
+max-num-batched-tokens: 32768
+
+# Prefix caching - disabled until tested
+enable-prefix-caching: false
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

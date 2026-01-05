@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+logs/
+*.log
+
+# Benchmarks (raw GuideLLM output, large)
+benchmarks/
+# results/ is tracked — compact summaries for long-term comparison
+
+# Environment
+.env
+.venv/
+__pycache__/

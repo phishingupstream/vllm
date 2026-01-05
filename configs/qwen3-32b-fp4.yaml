@@ -1,0 +1,34 @@
+# Qwen3-32B NVFP4 - Dense model (not MoE), ~16GB with NVFP4 quantization
+model: nvidia/Qwen3-32B-FP4
+served-model-name: qwen3-32b
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# NVFP4 quantization
+quantization: modelopt
+
+# Memory - 32GB GPU with 19GB model, only ~10GB left for KV cache
+gpu-memory-utilization: 0.95
+max-model-len: 8192
+kv-cache-dtype: fp8
+
+# Scheduling
+enable-chunked-prefill: true
+max-num-seqs: 32
+max-num-batched-tokens: 32768
+
+# Disable CUDA graphs for initial testing (safer)
+enforce-eager: true
+
+# Tool calling
+enable-auto-tool-choice: true
+tool-call-parser: hermes
+
+# Logging
+enable-log-requests: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

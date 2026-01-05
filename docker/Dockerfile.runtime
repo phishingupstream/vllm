@@ -1,0 +1,139 @@
+# =============================================================================
+# vLLM Runtime Layer
+# Uses standard base image + prebuilt FlashInfer wheels + SM120 CUDA extensions
+# =============================================================================
+# Usage:
+#   docker build --build-arg SM120_IMAGE=vllm:sm120 --build-arg BASE_IMAGE=base:cuda131 \
+#     -t vllm:runtime .
+# =============================================================================
+
+ARG SM120_IMAGE=vllm:sm120
+ARG BASE_IMAGE=base:cuda131
+FROM ${SM120_IMAGE} AS sm120
+FROM ${BASE_IMAGE}
+
+USER root
+
+# Build environment
+ENV TORCH_CUDA_ARCH_LIST="12.0+PTX"
+ENV CUDA_HOME=/usr/local/cuda
+ENV MAX_JOBS=16
+
+# Copy compiled SM120 CUDA extensions from sm120 build
+# Only causal-conv1d and mamba-ssm still need source builds (no prebuilt SM120 wheels)
+COPY --from=sm120 /usr/local/lib/python3.12/dist-packages/causal_conv1d /usr/local/lib/python3.12/dist-packages/causal_conv1d
+COPY --from=sm120 /usr/local/lib/python3.12/dist-packages/causal_conv1d_cuda.cpython-312-x86_64-linux-gnu.so /usr/local/lib/python3.12/dist-packages/
+COPY --from=sm120 /usr/local/lib/python3.12/dist-packages/causal_conv1d-*.dist-info /usr/local/lib/python3.12/dist-packages/
+COPY --from=sm120 /usr/local/lib/python3.12/dist-packages/mamba_ssm /usr/local/lib/python3.12/dist-packages/mamba_ssm
+COPY --from=sm120 /usr/local/lib/python3.12/dist-packages/mamba_ssm-*.dist-info /usr/local/lib/python3.12/dist-packages/
+
+# FlashInfer 0.6.7.post2 — prebuilt wheels with SM120 AOT modules (cu130 wheel works on CUDA 13.1)
+# Replaces the ~90min source build. The jit-cache wheel (~2GB) contains 822 prebuilt .so files
+# including SM120: fused_moe_120, gemm_sm120, fp4_gemm_cutlass_sm120, fp4_quantization_120/120f
+ARG FLASHINFER_VERSION=0.6.7.post2
+RUN pip install --no-cache-dir \
+    "flashinfer-python==${FLASHINFER_VERSION}" \
+    "flashinfer-cubin==${FLASHINFER_VERSION}" && \
+    pip install --no-cache-dir \
+    "https://github.com/flashinfer-ai/flashinfer/releases/download/v${FLASHINFER_VERSION}/flashinfer_jit_cache-${FLASHINFER_VERSION}%2Bcu130-cp39-abi3-manylinux_2_28_x86_64.whl" && \
+    pip cache purge
+
+# FlashInfer data directory must be writable for JIT compilation of non-prebuilt ops
+RUN chmod -R a+w /usr/local/lib/python3.12/dist-packages/flashinfer/data/ || true
+
+# CUDA 12 compat — vLLM precompiled wheels link against libcudart.so.12
+# NGC base image has CUDA 13.1 only. Symlink provides the runtime loader target.
+RUN ln -sf /usr/local/cuda/lib64/libcudart.so /usr/local/cuda/lib64/libcudart.so.12
+
+# Install vLLM from source (Python-only, CUDA extensions via prebuilt SM120 image)
+# NGC PyTorch ABI differs from stock PyTorch — precompiled wheels crash with
+# undefined symbol errors. Build from source so _C.abi3.so links against our torch.
+# --no-deps prevents torch/numpy downgrade from PyPI; deps installed explicitly below
+ENV VLLM_USE_PRECOMPILED=0
+RUN pip install --no-cache-dir setuptools-scm && \
+    pip install --no-cache-dir --no-build-isolation --no-deps \
+    "vllm @ git+https://github.com/vllm-project/vllm.git@e80e633927ab11570cc4d07a55e5420d05c7fe99" && \
+    pip install --no-cache-dir quack-kernels torch-c-dlpack-ext nvidia-cutlass-dsl && \
+    pip cache purge
+
+# Install vLLM's Python runtime dependencies
+# Derived from: pip show vllm | grep Requires (minus torch/flashinfer/cuda already in base)
+RUN pip install --no-cache-dir --no-deps "compressed-tensors>=0.14.0" && \
+    pip install --no-cache-dir \
+    aiohttp anthropic blake3 cachetools cbor2 cloudpickle \
+    depyf diskcache einops fastapi filelock \
+    gguf ijson lark llguidance lm-format-enforcer loguru \
+    mcp "mistral_common[image]>=1.10.0" model-hosting-container-standards msgspec \
+    numba "openai>=2.0.0" openai-harmony opencv-python-headless \
+    opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp \
+    opentelemetry-semantic-conventions-ai outlines_core \
+    partial-json-parser pillow prometheus-fastapi-instrumentator \
+    prometheus_client protobuf psutil py-cpuinfo pybase64 pydantic \
+    python-json-logger pyyaml pyzmq regex requests sentencepiece \
+    setproctitle six tiktoken tokenizers tqdm "transformers>=5.5.0" \
+    typing_extensions uvicorn starlette sse-starlette uvloop httptools \
+    watchfiles xgrammar interegular ray \
+    langfuse openlit && \
+    pip cache purge
+
+# Benchmarking tool (vllm-project/guidellm)
+RUN pip install --no-cache-dir guidellm && pip cache purge
+
+# Apply patches for SM120 compatibility
+COPY docker/patches/ /tmp/patches/
+
+# Fix torch._opaque_base ImportError on NGC PyTorch (private API not in NGC builds)
+RUN python3 /tmp/patches/fix_opaque_base_ngc.py || echo "opaque_base patch not needed"
+# Route SM120 (RTX 5090) MXFP4 to FlashInfer CUTLASS instead of broken Marlin kernels
+RUN python3 /tmp/patches/fix_mxfp4_sm120.py || echo "MXFP4 SM120 patch not needed"
+# [SUPERSEDED by upstream #34779] Qwen3 reasoning streaming
+# RUN python3 /tmp/patches/fix_qwen3_reasoning_streaming.py || echo "Qwen3 reasoning patch not needed"
+# Map reasoning_effort to thinking_token_budget defaults + enable_thinking for Qwen3.5 template
+RUN python3 /tmp/patches/fix_reasoning_effort_budget_defaults.py || echo "reasoning effort budget defaults patch not needed"
+# Accept Anthropic thinking config (thinking.type + budget_tokens) on /v1/messages endpoint
+RUN python3 /tmp/patches/fix_anthropic_thinking_compat.py || echo "anthropic thinking compat patch not needed"
+# Escape Gemma 4 special-token chars (< > { } in string values) in tool call args
+RUN python3 /tmp/patches/fix_gemma4_tool_args_encoding.py || echo "gemma4 tool args encoding patch not needed"
+# [SUPERSEDED by upstream] Empty user messages after tool_result extraction
+# RUN python3 /tmp/patches/fix_anthropic_empty_tool_message.py || echo "anthropic empty tool message patch not needed"
+# [SUPERSEDED by upstream #39027] Tool call during reasoning
+# RUN python3 /tmp/patches/fix_tool_call_during_reasoning.py || echo "tool call during reasoning patch not needed"
+# [SUPERSEDED by upstream #38909] Gemma4 angle bracket doubling
+# RUN python3 /tmp/patches/fix_gemma4_tool_parser_angle_bracket.py || echo "gemma4 angle bracket patch not needed"
+# [SUPERSEDED by upstream #38992] Gemma4 delimiter fragment leak
+# RUN python3 /tmp/patches/fix_gemma4_tool_parser_delim_leak.py || echo "gemma4 delim leak patch not needed"
+# [SUPERSEDED by upstream #39027] Gemma4 non-streaming thinking leak
+# RUN python3 /tmp/patches/fix_gemma4_reasoning_nonstreaming.py || echo "gemma4 reasoning nonstreaming patch not needed"
+# [SUPERSEDED by upstream #34754] Reasoning lost on transition
+# RUN python3 /tmp/patches/fix_reasoning_lost_on_transition.py || echo "reasoning lost on transition patch not needed"
+# [SUPERSEDED by upstream #39027] Reasoning start token leak
+# RUN python3 /tmp/patches/fix_reasoning_start_token_leak.py || echo "reasoning start token leak patch not needed"
+# Fix delta_message UnboundLocalError in streaming when reasoning already ended in a prior chunk
+RUN python3 /tmp/patches/fix_delta_message_unbound.py || echo "delta_message unbound patch not needed"
+
+# [OBSOLETE v0.19] native reasoning_effort + thinking_token_budget on ChatCompletionRequest
+# RUN python3 /tmp/patches/fix_enable_thinking_compat.py || echo "enable_thinking compat patch not needed"
+
+# [OBSOLETE v0.17] upstream rewrote MoE oracle, bug eliminated
+# RUN python3 /tmp/patches/fix_nvfp4_experts_cls.py || echo "NVFP4 patch not needed"
+# [OBSOLETE v0.17] VIT crash handled by mm-encoder-attn-backend: TORCH_SDPA in model config;
+# main model backend ordering for SM120 now correct upstream
+# RUN python3 /tmp/patches/fix_vit_attn_sm120.py || echo "VIT attn SM120 patch not needed"
+# [OBSOLETE v0.17] upstream fixed version check ("2.10.0" not "2.10.0.dev")
+# RUN python3 /tmp/patches/fix_torch_compile.py || echo "torch compile patch not needed"
+
+RUN rm -rf /tmp/patches
+
+# Create directories
+RUN mkdir -p ~/projects/vllm/logs && \
+    chown -R ubuntu:ubuntu ~/projects/vllm/logs
+
+# Switch to non-root user
+USER ubuntu
+WORKDIR /home/ubuntu
+
+EXPOSE 8004 7000
+
+ENTRYPOINT []
+
+CMD ["sh", "-c", "vllm serve --config ${MODEL_CONFIG:-~/projects/vllm/configs/qwen3-14b-fp8.yaml} 2>&1 | tee -a ~/projects/vllm/logs/vllm-$(date +%Y%m%d).log"]

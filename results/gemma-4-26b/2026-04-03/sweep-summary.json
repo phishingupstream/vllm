@@ -1,0 +1,50 @@
+{
+  "model": "google/gemma-4-26B-A4B-it",
+  "quant": "fp8 (server-side)",
+  "date": "2026-04-03",
+  "type": "adaptive_sweep",
+  "workload": "1024in/256out, 20 prompts, rate=inf",
+  "findings": {
+    "optimal_max_num_seqs": 4,
+    "optimal_max_num_batched_tokens": 4096,
+    "optimal_throughput_tok_s": 417.8,
+    "optimal_tpot_ms": 8.87,
+    "oom_cliff": "seqs=6+ (CUDA graph capture memory overhead)",
+    "compile_config": "VLLM_COMPILE + FULL_AND_PIECEWISE cudagraphs [1,2,4]",
+    "attention_backend": "TRITON_ATTN (FLASHINFER rejects head_dim 512)"
+  },
+  "results": {
+    "seqs1_batch8192": {
+      "output_throughput": 149.3236226510648,
+      "median_tpot_ms": 6.531028263270855,
+      "median_ttft_ms": 16379.664856009185,
+      "median_e2el_ms": 18043.09823352378,
+      "completed": 20,
+      "num_prompts": 20
+    },
+    "seqs2_batch8192": {
+      "output_throughput": 240.26378842430532,
+      "median_tpot_ms": 7.913332566271955,
+      "median_ttft_ms": 9923.95421944093,
+      "median_e2el_ms": 11968.033251934685,
+      "completed": 20,
+      "num_prompts": 20
+    },
+    "seqs4_batch4096": {
+      "output_throughput": 417.7781068789958,
+      "median_tpot_ms": 8.867930427339731,
+      "median_ttft_ms": 5274.971972568892,
+      "median_e2el_ms": 7515.717005939223,
+      "completed": 20,
+      "num_prompts": 20
+    },
+    "seqs4_batch8192": {
+      "output_throughput": 411.5379522358105,
+      "median_tpot_ms": 9.00027950193879,
+      "median_ttft_ms": 5428.88206418138,
+      "median_e2el_ms": 7697.027053567581,
+      "completed": 20,
+      "num_prompts": 20
+    }
+  }
+}

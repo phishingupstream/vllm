@@ -1,0 +1,28 @@
+model: nvidia/Nemotron-Flash-3B-Instruct
+served-model-name:
+  - nemotron-flash-3b
+  - default
+safetensors-load-strategy: eager
+mamba-ssm-cache-dtype: float32
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+allowed-local-media-path: "/data"
+enable-log-requests: true
+enable-log-outputs: true
+log-error-stack: true
+uvicorn-log-level: "debug"
+
+# Enable CUDA Graphs for faster inference
+compilation-config: '{"level":3, "cudagraph_mode": "FULL_DECODE_ONLY"}'
+cuda-graph-sizes: 1
+
+enable-chunked-prefill: true
+enable-prefix-caching: false
+max-num-seqs: 128
+max-num-batched-tokens: 2048
+gpu-memory-utilization: 0.80
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

@@ -1,0 +1,25 @@
+model: huihui-ai/gemma-3-12b-it-abliterated
+served-model-name:
+  - gemma-3-12b-abliterated
+  - default
+tokenizer-mode: auto
+enable-auto-tool-choice: true
+tool-call-parser: hermes
+enable-prefix-caching: true
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+gpu-memory-utilization: 0.90
+max-model-len: "8k"
+max-num-seqs: 256
+max-num-batched-tokens: 2048
+allowed-local-media-path: "/data"
+enable-log-requests: true
+enable-log-outputs: true
+log-error-stack: true
+uvicorn-log-level: "debug"
+
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

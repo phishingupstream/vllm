@@ -1,0 +1,18 @@
+model: txn545/Qwen3.5-35B-A3B-NVFP4
+served-model-name:
+  - qwen3.5-35b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+attention-config: '{"backend": "FLASHINFER"}'
+mm-encoder-attn-backend: TORCH_SDPA
+compilation-config: '{"mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1,2]}'
+gpu-memory-utilization: 0.95
+max-model-len: 131072
+kv-cache-dtype: fp8
+enable-prefix-caching: false
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 1
+max-num-batched-tokens: 8192

@@ -1,0 +1,114 @@
+{
+  "model": "txn545/Qwen3.5-35B-A3B-NVFP4",
+  "date": "2026-03-13",
+  "type": "config_sweep",
+  "findings": {
+    "optimal_max_num_seqs": 1,
+    "optimal_gpu_memory_utilization": 0.86,
+    "decode_tpot_ms": 6.44,
+    "decode_tok_per_s": 156,
+    "batching_penalty": "5x TPOT degradation at seqs=4 (DeltaNet recurrent state overhead)",
+    "gpu_util_limit": "Triton autotuner OOMs at 0.90+ (solve_tril needs ~4GB headroom)"
+  },
+  "results": {
+    "SERVE--baseline-BENCH--long_input": {
+      "output_throughput": 130.1,
+      "median_tpot_ms": 6.49,
+      "median_ttft_ms": 4276.0,
+      "completed": 5,
+      "num_prompts": 5,
+      "input_len": 8192,
+      "output_len": 256,
+      "max_num_seqs": 1,
+      "gpu_memory_utilization": 0.86
+    },
+    "SERVE--baseline-BENCH--medium": {
+      "output_throughput": 152.0,
+      "median_tpot_ms": 6.45,
+      "median_ttft_ms": 15245.0,
+      "completed": 10,
+      "num_prompts": 10,
+      "input_len": 2048,
+      "output_len": 512,
+      "max_num_seqs": 1,
+      "gpu_memory_utilization": 0.86
+    },
+    "SERVE--baseline-BENCH--short": {
+      "output_throughput": 82.3,
+      "median_tpot_ms": 6.44,
+      "median_ttft_ms": 44488.0,
+      "completed": 20,
+      "num_prompts": 20,
+      "input_len": 512,
+      "output_len": 256,
+      "max_num_seqs": 1,
+      "gpu_memory_utilization": 0.86
+    },
+    "SERVE--gpu90_seqs1-BENCH--short": {
+      "output_throughput": 0.0,
+      "median_tpot_ms": 0.0,
+      "median_ttft_ms": 0.0,
+      "completed": 0,
+      "num_prompts": 20,
+      "input_len": 0,
+      "output_len": 0,
+      "max_num_seqs": 0,
+      "gpu_memory_utilization": 0
+    },
+    "SERVE--gpu95_seqs1-BENCH--short": {
+      "output_throughput": 0.0,
+      "median_tpot_ms": 0.0,
+      "median_ttft_ms": 0.0,
+      "completed": 0,
+      "num_prompts": 20,
+      "input_len": 0,
+      "output_len": 0,
+      "max_num_seqs": 0,
+      "gpu_memory_utilization": 0
+    },
+    "SERVE--prefix_cache_on-BENCH--short": {
+      "output_throughput": 0.0,
+      "median_tpot_ms": 0.0,
+      "median_ttft_ms": 0.0,
+      "completed": 0,
+      "num_prompts": 20,
+      "input_len": 0,
+      "output_len": 0,
+      "max_num_seqs": 0,
+      "gpu_memory_utilization": 0
+    },
+    "SERVE--seqs4_batch16k-BENCH--long_input": {
+      "output_throughput": 2.9,
+      "median_tpot_ms": 0.0,
+      "median_ttft_ms": 335.0,
+      "completed": 1,
+      "num_prompts": 5,
+      "input_len": 0,
+      "output_len": 0,
+      "max_num_seqs": 0,
+      "gpu_memory_utilization": 0
+    },
+    "SERVE--seqs4_batch16k-BENCH--medium": {
+      "output_throughput": 137.9,
+      "median_tpot_ms": 31.52,
+      "median_ttft_ms": 16632.0,
+      "completed": 10,
+      "num_prompts": 10,
+      "input_len": 2048,
+      "output_len": 512,
+      "max_num_seqs": 4,
+      "gpu_memory_utilization": 0.86
+    },
+    "SERVE--seqs4_batch16k-BENCH--short": {
+      "output_throughput": 102.8,
+      "median_tpot_ms": 31.57,
+      "median_ttft_ms": 25532.0,
+      "completed": 20,
+      "num_prompts": 20,
+      "input_len": 512,
+      "output_len": 256,
+      "max_num_seqs": 4,
+      "gpu_memory_utilization": 0.86
+    }
+  }
+}

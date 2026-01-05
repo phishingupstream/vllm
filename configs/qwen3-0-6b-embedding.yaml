@@ -1,0 +1,19 @@
+model: Qwen/Qwen3-Embedding-0.6B
+served-model-name: qwen3-embedding
+runner: "pooling"
+convert: "embed"
+host: "0.0.0.0"
+port: 8000
+max-model-len: 512
+
+# Performance — maximise batch embedding throughput
+enforce-eager: true           # required for RTX 5090 SM120
+attention-config: '{"backend": "FLASHINFER"}'
+dtype: float16
+gpu-memory-utilization: 0.95  # 0.6B model uses ~1.1GB; fill rest with batch KV
+max-num-seqs: 1024            # large batch concurrency
+max-num-batched-tokens: 65536 # pack as many tokens per step as possible
+enable-chunked-prefill: true
+
+# Logging
+disable-log-requests: true

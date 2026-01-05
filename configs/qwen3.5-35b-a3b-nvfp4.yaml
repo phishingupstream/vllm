@@ -1,0 +1,60 @@
+model: Kbenkhaled/Qwen3.5-35B-A3B-NVFP4
+served-model-name:
+  - qwen3.5-35b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# Qwen3.5 DeltaNet hybrid attention (30 DeltaNet + 10 Attention layers)
+attention-config: '{"backend": "FLASHINFER"}'
+mm-encoder-attn-backend: TORCH_SDPA   # flash_attn varlen PTX incompatible with CUDA 13 on SM120
+compilation-config: '{"mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1,2]}'
+
+# RTX 5090 32GB - MoE model (35B params, 256 experts, ~3B active per token)
+# Model weights: ~21.8GB NVFP4. DeltaNet Triton workspace outside PyTorch pool.
+# Only 10/40 layers use KV cache (30 DeltaNet layers use fixed recurrent state).
+# Only 10/40 layers use KV cache (fp8); 30 DeltaNet layers use fixed recurrent state.
+# 262K = model's native max_position_embeddings. Stable at 0.86 util, max-num-seqs=1.
+# KV cache: 3.08 GiB / 79,648 token-slots. DeltaNet O(1) state allows full 262K context.
+# Prefill: 22K tok/s @10K, 13K @86K, 10K @129K, 7.6K @200K, 6K @261K. Decode: 160 tok/s.
+# Claude Code hardcodes 200K context for unknown models → compacts before hitting 262K.
+gpu-memory-utilization: 0.86
+max-model-len: 262144
+kv-cache-dtype: fp8
+
+enable-prefix-caching: false   # DeltaNet linear attention — incompatible
+
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 1
+max-num-batched-tokens: 8192
+
+# Tool calling
+enable-auto-tool-choice: true
+tool-call-parser: qwen3_coder
+
+# Thinking mode
+# NOTE: Thinking is enabled server-side intentionally. Do NOT disable it here.
+# Clients that don't want thinking can pass enable_thinking=false per-request
+# (supported via fix_enable_thinking_compat.py patch). Forcing it off globally
+# would break clients (e.g. OpenClaw) that rely on reasoning output.
+# Official recommended sampling for thinking mode general tasks:
+# temperature=1.0, top_p=0.95, top_k=20, presence_penalty=1.5
+# The presence_penalty is critical — prevents runaway reasoning loops.
+reasoning-parser: qwen3
+reasoning-config: '{"reasoning_start_str": "<think>", "reasoning_end_str": "</think>"}'
+default-chat-template-kwargs: '{"enable_thinking": true}'
+
+# Multimodal
+limit-mm-per-prompt: '{"image": 4, "video": 1}'
+allowed-local-media-path: "/data"
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

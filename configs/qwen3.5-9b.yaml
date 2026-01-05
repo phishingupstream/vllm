@@ -1,0 +1,41 @@
+model: ~/.cache/huggingface/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
+served-model-name:
+  - qwen3.5-9b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+attention-config: '{"backend": "FLASHINFER"}'
+mm-encoder-attn-backend: TORCH_SDPA   # flash_attn varlen PTX incompatible with CUDA 13 on SM120
+compilation-config: '{"mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1,2,4,8,16,32]}'
+
+gpu-memory-utilization: 0.88   # gdn_attention_core Triton workspace (~9MB/1K tok) outside PyTorch pool; 0.88 leaves ~390MB headroom vs 0.90 which leaves ~32MB → OOM
+max-model-len: 65536
+kv-cache-dtype: fp8
+
+enable-prefix-caching: false   # linear attention layers — same rule as Nemotron
+
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 4
+max-num-batched-tokens: 16384
+
+enable-auto-tool-choice: true
+tool-call-parser: qwen3_coder
+
+reasoning-parser-plugin: ~/projects/vllm/parsers/nano_v3_reasoning_parser.py
+reasoning-config: '{"reasoning_start_str": "<think>", "reasoning_end_str": "</think>"}'
+default-chat-template-kwargs: '{"enable_thinking": true}'
+structured-outputs-config: '{"reasoning_parser": "nano_v3"}'
+
+limit-mm-per-prompt: '{"image": 4, "video": 1}'
+allowed-local-media-path: "/data"
+
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"

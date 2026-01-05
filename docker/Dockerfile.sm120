@@ -1,0 +1,76 @@
+# =============================================================================
+# SM120 CUDA Extension Builder (Blackwell/RTX 5090)
+# =============================================================================
+# WARNING: This image takes ~90 minutes to build from scratch.
+# Only rebuild when upgrading causal-conv1d, mamba-ssm, or FlashInfer.
+# The runtime image (Dockerfile.runtime) imports compiled extensions from here.
+# =============================================================================
+
+# =============================================================================
+# STAGE 1: Build base with system dependencies (rarely changes)
+# =============================================================================
+FROM nvcr.io/nvidia/pytorch:26.02-py3 AS build-base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CUDA_HOME=/usr/local/cuda
+
+# SM120 build configuration
+ENV TORCH_CUDA_ARCH_LIST="12.0+PTX"
+ENV MAX_JOBS=16
+ENV NVCC_THREADS=8
+
+# FlashInfer SM120 flags
+ENV FLASHINFER_ENABLE_SM120=1
+ENV FLASHINFER_ENABLE_AOT=1
+
+# Build dependencies + ccache for faster rebuilds
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ninja-build \
+    ccache \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir ninja packaging wheel setuptools setuptools_scm
+
+# Enable ccache
+ENV PATH="/usr/lib/ccache:${PATH}"
+ENV CCACHE_DIR=/tmp/ccache
+
+# =============================================================================
+# STAGE 2: Build causal-conv1d - for Mamba/SSM models
+# NOTE: causal-conv1d ignores TORCH_CUDA_ARCH_LIST, hardcodes arch based on CUDA version
+# Building for all archs (~2 min) - patching is fragile
+# =============================================================================
+FROM build-base AS build-causal-conv1d
+
+WORKDIR /tmp
+RUN git clone --depth 1 https://github.com/Dao-AILab/causal-conv1d.git && \
+    cd causal-conv1d && \
+    pip install . --no-build-isolation
+
+# =============================================================================
+# STAGE 3: Build mamba-ssm - for Mamba/hybrid models (Jamba, etc.)
+# Same issue - hardcoded arch list
+# =============================================================================
+FROM build-causal-conv1d AS build-mamba
+
+RUN git clone --depth 1 https://github.com/state-spaces/mamba.git && \
+    cd mamba && \
+    pip install . --no-build-isolation
+
+# =============================================================================
+# STAGE 4: Build FlashInfer - attention backend with SM120 support
+# FlashInfer uses CMake and should respect TORCH_CUDA_ARCH_LIST
+# =============================================================================
+FROM build-mamba AS build-flashinfer
+
+WORKDIR /tmp
+RUN git clone https://github.com/flashinfer-ai/flashinfer.git && \
+    cd flashinfer && \
+    git submodule update --init --recursive && \
+    pip install . -v --no-build-isolation 2>&1 | tee /tmp/flashinfer_build.log
+
+# Clean up source directories (keep logs for debugging)
+RUN rm -rf /tmp/causal-conv1d /tmp/mamba /tmp/flashinfer
+
+# Make FlashInfer data directory writable for JIT compilation at runtime
+RUN chmod -R a+w /usr/local/lib/python3.12/dist-packages/flashinfer/data/ || true

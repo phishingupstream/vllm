@@ -1,0 +1,61 @@
+# Gemma 4 31B-IT NVFP4 — Dense (30.7B all active)
+# Hybrid attention: 50 sliding window (1024) + 10 full attention layers (every 6th)
+# Multimodal (vision). Nvidia official NVFP4 quantization via ModelOpt.
+# KV cache: 80 KiB/token (full attn) + 400 MiB fixed (sliding)
+model: nvidia/Gemma-4-31B-IT-NVFP4
+served-model-name:
+  - gemma-4-31b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# NVFP4 via ModelOpt — proven quantization format on SM120
+quantization: modelopt
+kv-cache-dtype: fp8
+
+# SM120 attention — FLASHINFER doesn't support head_dim 512 (global attn layers)
+# Let vLLM auto-select (falls back to TORCH_SDPA or TRITON for large head dims)
+mm-encoder-attn-backend: TORCH_SDPA
+
+# Memory — ~17-19 GiB model, ~9 GiB for KV cache
+# Full attention: 80 KiB/token (10 layers × 16 KV heads × 256 dim)
+# Sliding: 400 MiB fixed (50 layers × 1024 tokens)
+# ~65K context feasible, tune up after testing
+gpu-memory-utilization: 0.90
+max-model-len: 65536
+enforce-eager: true
+
+# Scheduling — dense 31B, conservative batching
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 4
+max-num-batched-tokens: 8192
+
+# Prefix caching
+enable-prefix-caching: true
+
+# Tool calling — Gemma 4 native parser
+enable-auto-tool-choice: true
+tool-call-parser: gemma4
+
+# Reasoning — Gemma 4 native parser
+reasoning-parser: gemma4
+
+# Multimodal
+limit-mm-per-prompt: '{"image": 4}'
+allowed-local-media-path: "/data"
+
+# Gemma 4 recommended sampling
+override-generation-config: '{"temperature": 1.0, "top_p": 0.95, "top_k": 64}'
+
+# Thinking budget: v0.19 native thinking_token_budget replaces custom logits processor.
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning

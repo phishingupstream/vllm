@@ -1,0 +1,75 @@
+# Gemma 4 26B-A4B-it — MoE (128 experts, top-8, 3.8B active)
+# Hybrid attention: 26 sliding window (1024) + 4 full attention layers (every 6th)
+# Multimodal (vision). Server-side FP8 quantization.
+# KV cache: 16 KiB/token (full attn) + 104 MiB fixed (sliding) — very light
+model: google/gemma-4-26B-A4B-it
+served-model-name:
+  - gemma-4-26b
+  - default
+host: "0.0.0.0"
+port: 8000
+trust-remote-code: true
+
+# FP8 server-side quantization — 50GB BF16 → ~25.7 GiB
+# If SM120 cuBLAS errors: switch to protoLabsAI/gemma-4-26B-A4B-it-FP8
+# and remove quantization line
+quantization: fp8
+kv-cache-dtype: fp8
+
+# SM120 attention — FLASHINFER doesn't support head_dim 512 (global attn layers)
+# Let vLLM auto-select (falls back to TORCH_SDPA or TRITON for large head dims)
+mm-encoder-attn-backend: TORCH_SDPA
+
+# Memory — model 25.65 GiB, 2.46 GiB KV cache at 0.95 util
+# KV very light: 4 full-attn layers × 8 KV heads = ~16 KiB/token full attn
+# vLLM reports estimated max 165,632 tokens — set to 160K (safe margin)
+# Memory — model 25.65 GiB. KV very light: 5 full-attn layers × 8 KV heads
+# 0.97 util gives ~3.8 GiB GPU KV (~33K tokens). max_new_tokens=16384 caps
+# output to prevent deadlock (Claude Code sends max_tokens=32000).
+gpu-memory-utilization: 0.97
+max-model-len: 262144
+
+# torch compile + CUDA graphs: 162 tok/s (3.6x faster than enforce-eager 44.7 tok/s)
+# TTFT: 37ms. Startup takes ~80s for compilation + graph capture.
+compilation-config: '{"mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1,2]}'
+
+# Scheduling — 2 concurrent seqs to limit KV pressure
+enable-chunked-prefill: true
+async-scheduling: true
+max-num-seqs: 2
+max-num-batched-tokens: 4096
+
+# Prefix caching
+enable-prefix-caching: true
+
+# Tool calling — Gemma 4 native parser
+enable-auto-tool-choice: true
+tool-call-parser: gemma4
+
+# Reasoning — Gemma 4 native parser
+reasoning-parser: gemma4
+reasoning-config: '{"reasoning_start_str": "<|channel>", "reasoning_end_str": "<channel|>"}'
+default-chat-template-kwargs: '{"enable_thinking": true}'
+
+# Multimodal
+limit-mm-per-prompt: '{"image": 4}'
+allowed-local-media-path: "/data"
+
+# Gemma 4 recommended sampling
+# Gemma 4 recommended sampling + max_new_tokens cap.
+# 33K token KV pool. Claude Code sends max_tokens=32000 + ~20K prompt = deadlock.
+# 16384 leaves ~17K for prompts. Thinking budget (8192) + content fits within this.
+override-generation-config: '{"temperature": 1.0, "top_p": 0.95, "top_k": 64, "skip_special_tokens": false, "max_new_tokens": 16384}'
+
+# Thinking budget: v0.19 native thinking_token_budget replaces custom logits processor.
+# Budget set via {"thinking_token_budget": N} or {"reasoning_effort": "low/medium/high"}.
+# Default: medium (8192 tokens) via fix_reasoning_effort_budget_defaults patch.
+
+# OTEL tracing middleware — exports traces to SigNoz
+middleware:
+  - "plugins.otel_tracer.OtelTracerMiddleware"
+
+# Logging
+enable-log-requests: true
+disable-uvicorn-access-log: true
+uvicorn-log-level: warning

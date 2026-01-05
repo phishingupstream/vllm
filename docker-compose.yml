@@ -1,0 +1,36 @@
+# vLLM - High-performance LLM inference
+# Included from main docker-compose.yml
+
+services:
+  vllm:
+    extends:
+      file: ~/docker/base/common.yml
+      service: gpu
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+      args:
+        SM120_IMAGE: ${VLLM_SM120:-vllm:sm120-26.02}
+        BASE_IMAGE: ${VLLM_BASE:-base:cuda131}
+    image: vllm:runtime
+    container_name: vllm
+    hostname: vllm
+    env_file: ~/docker/.env
+    environment:
+      - HF_HOME=/faststore/huggingface
+      - HF_HUB_OFFLINE=1
+      - VLLM_USE_FLASHINFER_MOE_FP4=1
+      - VLLM_NVFP4_GEMM_BACKEND=flashinfer-cutlass
+      - PYTORCH_ALLOC_CONF=expandable_segments:True
+      - PYTHONUNBUFFERED=1
+      - MODEL_CONFIG=~/projects/vllm/configs/${LLM_MODEL:-qwen3-14b-fp8}.yaml
+      - PYTHONHASHSEED=0
+      - PYTHONPATH=~/projects/vllm
+      # OTEL tracing — SigNoz (via ASGI middleware)
+      - OTEL_SERVICE_NAME=vllm
+      - SIGNOZ_OTLP_ENDPOINT=http://signoz-otel-collector:4318/v1/traces
+    depends_on:
+      - caddy
+    expose:
+      - "8000"
+    restart: unless-stopped

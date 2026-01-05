@@ -1,0 +1,26 @@
+{
+    "short": {
+        "dataset-name": "random",
+        "input-len": 512,
+        "output-len": 256,
+        "num-prompts": 20,
+        "request-rate": "inf",
+        "ignore-eos": true
+    },
+    "medium": {
+        "dataset-name": "random",
+        "input-len": 2048,
+        "output-len": 512,
+        "num-prompts": 10,
+        "request-rate": "inf",
+        "ignore-eos": true
+    },
+    "long_input": {
+        "dataset-name": "random",
+        "input-len": 8192,
+        "output-len": 256,
+        "num-prompts": 5,
+        "request-rate": "inf",
+        "ignore-eos": true
+    }
+}
